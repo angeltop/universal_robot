@@ -376,6 +376,7 @@ def reorder_traj_joints(traj, joint_names):
             positions = [p.positions[i] for i in order],
             velocities = [p.velocities[i] for i in order] if p.velocities else [],
             accelerations = [p.accelerations[i] for i in order] if p.accelerations else [],
+	    effort = [0] * 6,
             time_from_start = p.time_from_start))
     traj.joint_names = joint_names
     traj.points = new_points
@@ -395,7 +396,7 @@ def interp_cubic(p0, p1, t_abs):
         q[i] = a + b*t + c*t**2 + d*t**3
         qdot[i] = b + 2*c*t + 3*d*t**2
         qddot[i] = 2*c + 6*d*t
-    return JointTrajectoryPoint(positions=q, velocities=qdot, accelerations=qddot, time_from_start=rospy.Duration(t_abs))
+    return JointTrajectoryPoint(positions=q, velocities=qdot, accelerations=qddot, effort=[0]*6, time_from_start=rospy.Duration(t_abs))
 
 # Returns (q, qdot, qddot) for sampling the JointTrajectory at time t.
 # The time t is the time since the trajectory was started.
@@ -490,6 +491,7 @@ class URTrajectoryFollower(object):
             positions = state.position,
             velocities = [0] * 6,
             accelerations = [0] * 6,
+	    effort = [0]*6,
             time_from_start = rospy.Duration(0.0))]
 
     def start(self):
@@ -565,6 +567,7 @@ class URTrajectoryFollower(object):
                 point1 = sample_traj(self.traj, now - self.traj_t0 + STOP_DURATION)
                 point1.velocities = [0] * 6
                 point1.accelerations = [0] * 6
+		point1.effort = [0] * 6
                 point1.time_from_start = rospy.Duration(STOP_DURATION)
                 self.traj_t0 = now
                 self.traj = JointTrajectory()
