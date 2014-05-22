@@ -60,12 +60,12 @@
     </visual>
     
     <collision>
+      <origin rpy="0 0 0" xyz="0 0 0.025"/>
       <geometry>
-        <mesh filename="package://ur_description/meshes/ur10/collision/Base.stl" />
+        <cylinder length="0.04" radius="0.09"/>
       </geometry>
-      <origin xyz="0.0 0.0 0.003" rpy="0.0 0.0 ${3.0 * pi / 4.0}" />
     </collision>
-
+    
     <inertial>
       <mass value="${base_mass}" />
       <inertia ixx="1.0" ixy="0.0" ixz="0.0" iyy="1.0" iyz="0.0" izz="1.0"/>
@@ -77,7 +77,7 @@
     <child link = "${prefix}shoulder_link" />
     <origin xyz="0.0 0.0 ${shoulder_height}" rpy="0.0 0.0 0.0" />
     <axis xyz="0.0 0.0 1.0" />
-    <limit lower="${-2.0 * pi}" upper="${2.0 * pi}" effort="330.0" velocity="2.16"/>
+    <limit lower="${-pi/2.0}" upper="${3.0 * pi / 2.0}" effort="330.0" velocity="2.16"/>
     <dynamics damping="1.2" friction="0.0"/>
   </joint>
   
@@ -90,9 +90,10 @@
     </visual>
 
     <collision>
-      <geometry>
-        <mesh filename="package://ur_description/meshes/ur10/collision/Shoulder.stl" />
-      </geometry>
+		<origin rpy="0 0 0" xyz="0 0 0"/>
+		<geometry>
+			<cylinder length="0.17" radius="0.08"/>
+		</geometry>
     </collision>
 
     <inertial>
@@ -107,7 +108,7 @@
     <child link = "${prefix}upper_arm_link" />
     <origin xyz="0.0 ${shoulder_offset} 0.0" rpy="0.0 ${pi / 2.0} 0.0" />    
     <axis xyz="0.0 1.0 0.0" />
-    <limit lower="${-2.0 * pi}" upper="${2.0 * pi}" effort="10.0" velocity="${pi}"/>
+    <limit lower="${-pi}" upper="${pi}" effort="10.0" velocity="${pi}"/>
     <dynamics damping="1.2" friction="0.0"/>
   </joint>
 
@@ -120,12 +121,13 @@
       <material name="UR/Blue" />
     </visual>
 
-    <collision>
-      <geometry>
-        <mesh filename="package://ur_description/meshes/ur10/collision/UpperArm.stl" />
-      </geometry>
-       <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0" />
-    </collision>
+	<collision>
+		<origin rpy="0 0 0" xyz="0 0 0.30"/>
+		<geometry>
+			<cylinder length="0.7" radius="0.05"/>
+		</geometry>
+		<origin rpy="0.0 0.0 0.0" xyz="0.0 0.0 0.0"/>
+	</collision>
 
     <inertial>
       <mass value="${upper_arm_mass}" />
@@ -139,7 +141,7 @@
     <child link = "${prefix}forearm_link" />
     <origin xyz="0.0 ${-elbow_offset} ${upper_arm_length}" rpy="0.0 0.0 0.0" />
     <axis xyz="0.0 1.0 0.0" />
-    <limit lower="${-2.0 * pi}" upper="${2.0 * pi}" effort="150.0" velocity="${pi}"/>
+    <limit lower="${-pi}" upper="${pi}" effort="150.0" velocity="${pi}"/>
     <dynamics damping="0.6" friction="0.0"/>
   </joint>
 
@@ -150,12 +152,13 @@
       </geometry>
       <material name="UR/Grey" />
     </visual>
-
-    <collision>
-      <geometry>
-        <mesh filename="package://ur_description/meshes/ur10/collision/Forearm.stl" />
-      </geometry>
-    </collision>
+    
+	<collision>
+		<origin rpy="0 0 0" xyz="0 0 0.28"/>
+ 		<geometry>
+			<cylinder length="0.675" radius="0.04"/>
+		</geometry>
+	</collision>
 
     <inertial>
       <mass value="${forearm_mass}" />
@@ -169,7 +172,7 @@
     <child link = "${prefix}wrist_1_link" />
     <origin xyz="0.0 0.0 ${forearm_length}" rpy="0.0 ${pi / 2.0} 0.0" />
     <axis xyz="0.0 1.0 0.0" />
-    <limit lower="${-2.0 * pi}" upper="${2.0 * pi}" effort="54.0" velocity="${pi}"/>
+    <limit lower="${-pi}" upper="${pi}" effort="54.0" velocity="${pi}"/>
     <dynamics damping="0.6" friction="0.0"/>
   </joint>
 
@@ -183,10 +186,10 @@
     </visual>
 
     <collision>
-      <geometry>
-        <mesh filename="package://ur_description/meshes/ur10/collision/Wrist1.stl" />
-      </geometry>
-      <origin xyz="0.0 ${wrist_1_length} 0.0" rpy="0.0 0 0.0" />
+    	<origin rpy="0 0 0" xyz="0.0 0.113 0.002"/>
+      	<geometry>
+        	<cylinder length="0.116" radius="0.045"/>
+      	</geometry>
     </collision>
 
     <inertial>
@@ -196,12 +199,12 @@
     </inertial>
   </link>
 
-    <joint name="${prefix}wrist_2_joint" type="revolute">
+  <joint name="${prefix}wrist_2_joint" type="revolute">
     <parent link="${prefix}wrist_1_link" />
     <child link = "${prefix}wrist_2_link" />
     <origin xyz="0.0 ${wrist_1_length} 0.0" rpy="0.0 0.0 0.0" />
     <axis xyz="0.0 0.0 1.0" />
-    <limit lower="${-2.0 * pi}" upper="${2.0 * pi}" effort="54.0" velocity="${pi}"/>
+    <limit lower="${-pi}" upper="${pi}" effort="54.0" velocity="${pi}"/>
     <dynamics damping="0.6" friction="0.0"/>
   </joint>
 
@@ -215,10 +218,10 @@
     </visual>
 
     <collision>
+      <origin rpy="${pi/2.0} 0 0" xyz="0.0 0 0.11"/>
       <geometry>
-        <mesh filename="package://ur_description/meshes/ur10/collision/Wrist2.stl" />
+        <cylinder length="0.11" radius="0.045"/>
       </geometry>
-      <origin xyz="0.0 0.0 ${wrist_2_length}" rpy="0.0 0.0 0.0" />
     </collision>
 
     <inertial>
@@ -233,7 +236,7 @@
     <child link = "${prefix}wrist_3_link" />
     <origin xyz="0.0 0.0 ${wrist_2_length}" rpy="0.0 0.0 0.0" />
     <axis xyz="0.0 1.0 0.0" />
-    <limit lower="${-2.0 * pi}" upper="${2.0 * pi}" effort="54.0" velocity="${pi}"/>
+    <limit lower="${-pi}" upper="${pi}" effort="54.0" velocity="${pi}"/>
     <dynamics damping="0.6" friction="0.0"/>
   </joint>
 
@@ -247,10 +250,10 @@
     </visual>
 
     <collision>
+      <origin rpy="${pi/2.0} 0 0" xyz="0 0.068 0"/>
       <geometry>
-        <mesh filename="package://ur_description/meshes/ur10/collision/Wrist3.stl" />
+        <cylinder length="0.02" radius="0.045"/>
       </geometry>
-      <origin xyz="0.0 ${wrist_3_length} 0.0" rpy="0.0 0.0 0" />
     </collision>
 
     <inertial>
