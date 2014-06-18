@@ -446,8 +446,9 @@ def within_tolerance(a_vec, b_vec, tol_vec):
 class URTrajectoryFollower(object):
     RATE = 0.02
     def __init__(self, robot, goal_time_tolerance=None):
-        self.goal_time_tolerance = goal_time_tolerance or rospy.Duration(0.0)
+        self.goal_time_tolerance = goal_time_tolerance or rospy.Duration(0.5)
         self.joint_goal_tolerances = [0.05, 0.05, 0.05, 0.05, 0.05, 0.05]
+        self.vel_goal_tolerances = [0.05, 0.05, 0.05, 0.05, 0.05, 0.05]
         self.following_lock = threading.Lock()
         self.T0 = time.time()
         self.robot = robot
@@ -501,6 +502,12 @@ class URTrajectoryFollower(object):
 
     def on_goal(self, goal_handle):
         log("on_goal")
+
+        # getting goal tolerance
+        for i in range(0,len(goal_handle.get_goal().goal_tolerance)):
+            self.joint_goal_tolerances[i] = goal_handle.get_goal().goal_tolerance[i].position
+            self.vel_goal_tolerances[i] = goal_handle.get_goal().goal_tolerance[i].velocity
+        self.goal_time_tolerance = goal_handle.get_goal().goal_time_tolerance
 
         # Checks that the robot is connected
         if not self.robot:
@@ -599,6 +606,7 @@ class URTrajectoryFollower(object):
                 last_point = self.traj.points[-1]
                 state = self.robot.get_joint_states()
                 position_in_tol = within_tolerance(state.position, last_point.positions, self.joint_goal_tolerances)
+                #position_in_tol = within_tolerance(state.position, last_point.positions, [0.01]*6)
                 # Performing this check to try and catch our error condition.  We will always
                 # send the last point just in case.
                 if not position_in_tol:
@@ -607,6 +615,9 @@ class URTrajectoryFollower(object):
                                 (now - self.traj_t0, self.traj.points[-1].time_from_start.to_sec()))
                     rospy.logwarn("Desired: %s\nactual: %s\nvelocity: %s" % \
                                           (last_point.positions, state.position, state.velocity))
+                    rospy.logwarn("Position Diff: %f	%f	%f	%f	%f	%f" % \
+                                          ((state.position[0]-last_point.positions[0])*3.141592654/180.0, (state.position[1]-last_point.positions[1])*3.141592654/180.0, (state.position[2]-last_point.positions[2])*3.141592654/180.0 , (state.position[3]-last_point.positions[3])*3.141592654/180.0 , (state.position[4]-last_point.positions[4])*3.141592654/180.0 , (state.position[5]-last_point.positions[5])*3.141592654/180.0))
+
                 setpoint = sample_traj(self.traj, self.traj.points[-1].time_from_start.to_sec())
 
                 try:
@@ -619,18 +630,21 @@ class URTrajectoryFollower(object):
                 if self.goal_handle:
                     last_point = self.traj.points[-1]
                     state = self.robot.get_joint_states()
-                    position_in_tol = within_tolerance(state.position, last_point.positions, [0.1]*6)
-                    velocity_in_tol = within_tolerance(state.velocity, last_point.velocities, [0.05]*6)
-                    if position_in_tol and velocity_in_tol:
+                    position_in_tol = within_tolerance(state.position, last_point.positions, self.joint_goal_tolerances)
+                    #velocity_in_tol = within_tolerance(state.velocity, last_point.velocities, [0.05]*6)
+                    if position_in_tol:# and velocity_in_tol:
                         # The arm reached the goal (and isn't moving).  Succeeding
                         self.goal_handle.set_succeeded()
                         self.goal_handle = None
-                    #elif now - (self.traj_t0 + last_point.time_from_start.to_sec()) > self.goal_time_tolerance.to_sec():
-                    #    # Took too long to reach the goal.  Aborting
-                    #    rospy.logwarn("Took too long to reach the goal.\nDesired: %s\nactual: %s\nvelocity: %s" % \
-                    #                      (last_point.positions, state.position, state.velocity))
-                    #    self.goal_handle.set_aborted(text="Took too long to reach the goal")
-                    #    self.goal_handle = None
+                    elif now - (self.traj_t0 + last_point.time_from_start.to_sec()) > self.goal_time_tolerance.to_sec():
+                        # Took too long to reach the goal.  Aborting
+                        rospy.logwarn("Took too long to reach the goal.\nDesired: %s\nactual: %s\nvelocity: %s" % \
+                                          (last_point.positions, state.position, state.velocity))
+                        self.goal_handle.set_aborted(text="Took too long to reach the goal")
+                        self.goal_handle = None
+                    else:
+                        self.goal_handle.set_aborted()
+                        self.goal_handle = None
 
 # joint_names: list of joints
 #
