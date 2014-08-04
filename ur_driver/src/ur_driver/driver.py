@@ -446,8 +446,8 @@ def within_tolerance(a_vec, b_vec, tol_vec):
 class URTrajectoryFollower(object):
     RATE = 0.02
     def __init__(self, robot, goal_time_tolerance=None):
-        self.goal_time_tolerance = goal_time_tolerance or rospy.Duration(0.5)
-        self.joint_goal_tolerances = [0.05, 0.05, 0.05, 0.05, 0.05, 0.05]
+        self.goal_time_tolerance = goal_time_tolerance or rospy.Duration(2.0)
+        self.joint_goal_tolerances = [0.07, 0.07, 0.07, 0.07, 0.07, 0.07]
         self.vel_goal_tolerances = [0.05, 0.05, 0.05, 0.05, 0.05, 0.05]
         self.following_lock = threading.Lock()
         self.T0 = time.time()
@@ -504,10 +504,11 @@ class URTrajectoryFollower(object):
         log("on_goal")
 
         # getting goal tolerance
-        for i in range(0,len(goal_handle.get_goal().goal_tolerance)):
-            self.joint_goal_tolerances[i] = goal_handle.get_goal().goal_tolerance[i].position
-            self.vel_goal_tolerances[i] = goal_handle.get_goal().goal_tolerance[i].velocity
-        self.goal_time_tolerance = goal_handle.get_goal().goal_time_tolerance
+        if len(goal_handle.get_goal().goal_tolerance)> 0:
+            for i in range(0,len(goal_handle.get_goal().goal_tolerance)):
+                self.joint_goal_tolerances[i] = goal_handle.get_goal().goal_tolerance[i].position
+                self.vel_goal_tolerances[i] = goal_handle.get_goal().goal_tolerance[i].velocity
+            self.goal_time_tolerance = goal_handle.get_goal().goal_time_tolerance
 
         # Checks that the robot is connected
         if not self.robot:
@@ -574,7 +575,7 @@ class URTrajectoryFollower(object):
                 point1 = sample_traj(self.traj, now - self.traj_t0 + STOP_DURATION)
                 point1.velocities = [0] * 6
                 point1.accelerations = [0] * 6
-		point1.effort = [0] * 6
+                point1.effort = [0] * 6
                 point1.time_from_start = rospy.Duration(STOP_DURATION)
                 self.traj_t0 = now
                 self.traj = JointTrajectory()
@@ -634,6 +635,7 @@ class URTrajectoryFollower(object):
                     #velocity_in_tol = within_tolerance(state.velocity, last_point.velocities, [0.05]*6)
                     if position_in_tol:# and velocity_in_tol:
                         # The arm reached the goal (and isn't moving).  Succeeding
+                        rospy.logwarn("Successful trajectory execution")
                         self.goal_handle.set_succeeded()
                         self.goal_handle = None
                     elif now - (self.traj_t0 + last_point.time_from_start.to_sec()) > self.goal_time_tolerance.to_sec():

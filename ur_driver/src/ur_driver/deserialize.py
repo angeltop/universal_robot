@@ -1,5 +1,7 @@
 import struct
 
+import sys
+
 class PackageType(object):
     ROBOT_MODE_DATA = 0
     JOINT_DATA = 1
@@ -192,6 +194,7 @@ class AdditionalInfo(object):
     @staticmethod
     def unpack(buf):
         ai = AdditionalInfo()
+        print >> sys.stderr, 'DEBUG=====', repr(buf)
         (_, _, ai.ctrl_bits, ai.teach_button) = struct.unpack_from("!IBIB", buf)
         return ai
 
@@ -241,7 +244,8 @@ class RobotState(object):
             elif ptype == PackageType.FORCE_MODE_DATA:
                 rs.force_mode_data = ForceModeData.unpack(package_buf)
             elif ptype == PackageType.ADDITIONAL_INFO:
-                rs.additional_info = AdditionalInfo.unpack(package_buf)
+                #rs.additional_info = AdditionalInfo.unpack(package_buf)
+                pass
             else:
                 rs.unknown_ptypes.append(ptype)
         return rs
