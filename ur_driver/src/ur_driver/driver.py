@@ -15,9 +15,11 @@ import actionlib
 from sensor_msgs.msg import JointState
 from control_msgs.msg import FollowJointTrajectoryAction
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+from geometry_msgs.msg import WrenchStamped
 
-from deserialize import RobotState, RobotMode
+from ur_driver.deserialize import RobotState, RobotMode
 from std_msgs.msg import Bool
+
 prevent_programming = False
 
 # Joint offsets, pulled from calibration information stored in the URDF
@@ -28,7 +30,7 @@ prevent_programming = False
 joint_offsets = {}
 
 PORT=30002
-REVERSE_PORT = 50001
+DEFAULT_REVERSE_PORT = 50001
 
 MSG_OUT = 1
 MSG_QUIT = 2
@@ -37,6 +39,8 @@ MSG_MOVEJ = 4
 MSG_WAYPOINT_FINISHED = 5
 MSG_STOPJ = 6
 MSG_SERVOJ = 7
+MSG_WRENCH = 9
+MULT_wrench = 10000.0
 MULT_jointstate = 10000.0
 MULT_time = 1000000.0
 MULT_blend = 1000.0
@@ -56,8 +60,9 @@ pub_joint_states = rospy.Publisher('joint_states', JointState)
 pub_emergency_stop = rospy.Publisher("emergency_stop", Bool)
 
 allow_execution = True;
-#dump_state = open('dump_state', 'wb')
-
+pub_wrench = rospy.Publisher('wrench', WrenchStamped)
+ #dump_state = open('dump_state', 'wb')
+ 
 def callback(data):
     allow_execution = data.data
 sub_abort_execution = rospy.Subscriber("abort_execution", Bool, callback)
@@ -72,7 +77,7 @@ def dumpstacks():
         for filename, lineno, name, line in traceback.extract_stack(stack):
             code.append('File: "%s", line %d, in %s' % (filename, lineno, name))
             if line:
-                code.append("  %s" % (line.strip()))
+                code.append(" %s" % (line.strip()))
     print "\n".join(code)
 
 def log(s):
@@ -80,7 +85,7 @@ def log(s):
 
 
 RESET_PROGRAM = '''def resetProg():
-  sleep(0.0)
+sleep(0.0)
 end
 '''
 #RESET_PROGRAM = ''
@@ -154,10 +159,10 @@ class URConnection(object):
         self.last_state = state
         #import deserialize; deserialize.pstate(self.last_state)
 
-        #log("Packet.  Mode=%s" % state.robot_mode_data.robot_mode)
+        #log("Packet. Mode=%s" % state.robot_mode_data.robot_mode)
 
         if not state.robot_mode_data.real_robot_enabled:
-            rospy.logfatal("Real robot is no longer enabled.  Driver is fuxored")
+            rospy.logfatal("Real robot is no longer enabled. Driver is fuxored")
             time.sleep(2)
             sys.exit(1)
 
@@ -165,7 +170,6 @@ class URConnection(object):
             pub_emergency_stop.publish(True)
         else:
             pub_emergency_stop.publish(False)
-        
         # If the urscript program is not executing, then the driver
         # needs to publish joint states using information from the
         # robot state packet.
@@ -263,7 +267,7 @@ class CommanderTCPHandler(SocketServer.BaseRequestHandler):
                 now = rospy.get_rostime()
                 if self.last_joint_states and \
                         self.last_joint_states.header.stamp < now - rospy.Duration(1.0):
-                    rospy.logerr("Stopped hearing from robot (last heard %.3f sec ago).  Disconnected" % \
+                    rospy.logerr("Stopped hearing from robot (last heard %.3f sec ago). Disconnected" % \
                                      (now - self.last_joint_states.header.stamp).to_sec())
                     raise EOF()
 
@@ -312,6 +316,23 @@ class CommanderTCPHandler(SocketServer.BaseRequestHandler):
                     msg.effort = state[12:18]
                     self.last_joint_states = msg
                     pub_joint_states.publish(msg)
+
+                elif mtype == MSG_WRENCH:
+                    while len(buf) < (6*4):
+                        buf = buf + self.recv_more()
+                    state_mult = struct.unpack_from("!%ii" % (6), buf, 0)
+                    buf = buf[6*4:]
+                    state = [s / MULT_wrench for s in state_mult]
+                    wrench_msg = WrenchStamped()
+                    wrench_msg.header.stamp = rospy.get_rostime()
+                    wrench_msg.wrench.force.x = state[0]
+                    wrench_msg.wrench.force.y = state[1]
+                    wrench_msg.wrench.force.z = state[2]
+                    wrench_msg.wrench.torque.x = state[3]
+                    wrench_msg.wrench.torque.y = state[4]
+                    wrench_msg.wrench.torque.z = state[5]
+                    pub_wrench.publish(wrench_msg)
+
                 elif mtype == MSG_QUIT:
                     print "Quitting"
                     raise EOF("Received quit")
@@ -360,11 +381,11 @@ class CommanderTCPHandler(SocketServer.BaseRequestHandler):
     
 
 class TCPServer(SocketServer.TCPServer):
-    allow_reuse_address = True  # Allows the program to restart gracefully on crash
+    allow_reuse_address = True # Allows the program to restart gracefully on crash
     timeout = 5
 
 
-# Waits until all threads have completed.  Allows KeyboardInterrupt to occur
+# Waits until all threads have completed. Allows KeyboardInterrupt to occur
 def joinAll(threads):
     while any(t.isAlive() for t in threads):
         for t in threads:
@@ -378,7 +399,7 @@ def get_segment_duration(traj, index):
     return (traj.points[index].time_from_start - traj.points[index-1].time_from_start).to_sec()
 
 # Reorders the JointTrajectory traj according to the order in
-# joint_names.  Destructive.
+# joint_names. Destructive.
 def reorder_traj_joints(traj, joint_names):
     order = [traj.joint_names.index(j) for j in joint_names]
 
@@ -388,7 +409,7 @@ def reorder_traj_joints(traj, joint_names):
             positions = [p.positions[i] for i in order],
             velocities = [p.velocities[i] for i in order] if p.velocities else [],
             accelerations = [p.accelerations[i] for i in order] if p.accelerations else [],
-	    effort = [0] * 6,
+            effort = [0] * 6,
             time_from_start = p.time_from_start))
     traj.joint_names = joint_names
     traj.points = new_points
@@ -504,7 +525,7 @@ class URTrajectoryFollower(object):
             positions = state.position,
             velocities = [0] * 6,
             accelerations = [0] * 6,
-	    effort = [0]*6,
+            effort = [0]*6,
             time_from_start = rospy.Duration(0.0))]
 
     def start(self):
@@ -514,13 +535,6 @@ class URTrajectoryFollower(object):
 
     def on_goal(self, goal_handle):
         log("on_goal")
-
-        # getting goal tolerance
-        if len(goal_handle.get_goal().goal_tolerance)> 0:
-            for i in range(0,len(goal_handle.get_goal().goal_tolerance)):
-                self.joint_goal_tolerances[i] = goal_handle.get_goal().goal_tolerance[i].position
-                self.vel_goal_tolerances[i] = goal_handle.get_goal().goal_tolerance[i].velocity
-            self.goal_time_tolerance = goal_handle.get_goal().goal_time_tolerance
 
         # Checks that the robot is connected
         if not self.robot:
@@ -553,6 +567,13 @@ class URTrajectoryFollower(object):
             goal_handle.set_rejected(text=message)
             return
 
+        # getting goal tolerance
+        if len(goal_handle.get_goal().goal_tolerance)> 0:
+            for i in range(0,len(goal_handle.get_goal().goal_tolerance)):
+                self.joint_goal_tolerances[i] = goal_handle.get_goal().goal_tolerance[i].position
+                self.vel_goal_tolerances[i] = goal_handle.get_goal().goal_tolerance[i].velocity
+            self.goal_time_tolerance = goal_handle.get_goal().goal_time_tolerance
+            
         # Orders the joints of the trajectory according to joint_names
         reorder_traj_joints(goal_handle.get_goal().trajectory, joint_names)
                 
@@ -611,7 +632,7 @@ class URTrajectoryFollower(object):
                         self.robot.send_servoj(999, setpoint.positions, 4 * self.RATE)
                     except socket.error:
                         pass
-                        
+                    
                 elif not self.last_point_sent:
                     # All intermediate points sent, sending last point to make sure we
                     # reach the goal.
@@ -620,8 +641,7 @@ class URTrajectoryFollower(object):
                     last_point = self.traj.points[-1]
                     state = self.robot.get_joint_states()
                     position_in_tol = within_tolerance(state.position, last_point.positions, self.joint_goal_tolerances)
-                    #position_in_tol = within_tolerance(state.position, last_point.positions, [0.01]*6)
-                    # Performing this check to try and catch our error condition.  We will always
+                    # Performing this check to try and catch our error condition. We will always
                     # send the last point just in case.
                     if not position_in_tol:
                         rospy.logwarn("Trajectory time exceeded and current robot state not at goal, last point required")
@@ -629,9 +649,6 @@ class URTrajectoryFollower(object):
                                     (now - self.traj_t0, self.traj.points[-1].time_from_start.to_sec()))
                         rospy.logwarn("Desired: %s\nactual: %s\nvelocity: %s" % \
                                               (last_point.positions, state.position, state.velocity))
-                        rospy.logwarn("Position Diff: %f	%f	%f	%f	%f	%f" % \
-                                              ((state.position[0]-last_point.positions[0])*3.141592654/180.0, (state.position[1]-last_point.positions[1])*3.141592654/180.0, (state.position[2]-last_point.positions[2])*3.141592654/180.0 , (state.position[3]-last_point.positions[3])*3.141592654/180.0 , (state.position[4]-last_point.positions[4])*3.141592654/180.0 , (state.position[5]-last_point.positions[5])*3.141592654/180.0))
-
                     setpoint = sample_traj(self.traj, self.traj.points[-1].time_from_start.to_sec())
 
                     try:
@@ -640,21 +657,20 @@ class URTrajectoryFollower(object):
                     except socket.error:
                         pass
                     
-                else:  # Off the end
+                else: # Off the end
                     if self.goal_handle:
                         last_point = self.traj.points[-1]
                         state = self.robot.get_joint_states()
-                        position_in_tol = within_tolerance(state.position, last_point.positions, self.joint_goal_tolerances)
+                        position_in_tol = within_tolerance(state.position, last_point.positions, [0.1]*6)
                         #velocity_in_tol = within_tolerance(state.velocity, last_point.velocities, [0.05]*6)
                         if position_in_tol:# and velocity_in_tol:
-                            # The arm reached the goal (and isn't moving).  Succeeding
-                            rospy.logwarn("Successful trajectory execution")
+                            # The arm reached the goal (and isn't moving). Succeeding
                             self.goal_handle.set_succeeded()
                             self.goal_handle = None
                         elif now - (self.traj_t0 + last_point.time_from_start.to_sec()) > self.goal_time_tolerance.to_sec():
-                            # Took too long to reach the goal.  Aborting
+                            # Took too long to reach the goal. Aborting
                             rospy.logwarn("Took too long to reach the goal.\nDesired: %s\nactual: %s\nvelocity: %s" % \
-                                              (last_point.positions, state.position, state.velocity))
+                            (last_point.positions, state.position, state.velocity))
                             self.goal_handle.set_aborted(text="Took too long to reach the goal")
                             self.goal_handle = None
                         else:
@@ -696,11 +712,20 @@ def main():
     joint_names = [prefix + name for name in JOINT_NAMES]
 
     # Parses command line arguments
-    parser = optparse.OptionParser(usage="usage: %prog robot_hostname")
+    parser = optparse.OptionParser(usage="usage: %prog robot_hostname [reverse_port]")
     (options, args) = parser.parse_args(rospy.myargv()[1:])
-    if len(args) != 1:
+    if len(args) < 1:
         parser.error("You must specify the robot hostname")
-    robot_hostname = args[0]
+    elif len(args) == 1:
+        robot_hostname = args[0]
+        reverse_port = DEFAULT_REVERSE_PORT
+    elif len(args) == 2:
+        robot_hostname = args[0]
+        reverse_port = int(args[1])
+        if not (0 <= reverse_port <= 65535):
+                parser.error("You entered an invalid port number")
+    else:
+        parser.error("Wrong number of parameters")
 
     # Reads the calibrated joint offsets from the URDF
     global joint_offsets
@@ -712,13 +737,13 @@ def main():
     max_velocity = rospy.get_param("~max_velocity", 2.0)
 
     # Sets up the server for the robot to connect to
-    server = TCPServer(("", 50001), CommanderTCPHandler)
+    server = TCPServer(("", reverse_port), CommanderTCPHandler)
     thread_commander = threading.Thread(name="CommanderHandler", target=server.serve_forever)
     thread_commander.daemon = True
     thread_commander.start()
 
     with open(roslib.packages.get_pkg_dir('ur_driver') + '/prog') as fin:
-        program = fin.read() % {"driver_hostname": get_my_ip(robot_hostname, PORT)}
+        program = fin.read() % {"driver_hostname": get_my_ip(robot_hostname, PORT), "driver_reverseport": reverse_port}
     connection = URConnection(robot_hostname, PORT, program)
     connection.connect()
     connection.send_reset_program()
@@ -734,7 +759,7 @@ def main():
                     print "Programming now prevented"
                     connection.send_reset_program()
             else:
-                print "Disconnected.  Reconnecting"
+                print "Disconnected. Reconnecting"
                 if action_server:
                     action_server.set_robot(None)
 
@@ -768,3 +793,4 @@ def main():
         raise
 
 if __name__ == '__main__': main()
+
