@@ -1,7 +1,5 @@
 import struct
 
-import sys
-
 class PackageType(object):
     ROBOT_MODE_DATA = 0
     JOINT_DATA = 1
@@ -12,6 +10,7 @@ class PackageType(object):
     CONFIGURATION_DATA = 6
     FORCE_MODE_DATA = 7
     ADDITIONAL_INFO = 8
+    CALIBRATION_DATA = 9
 
 class RobotMode(object):
     RUNNING = 0
@@ -84,7 +83,7 @@ class RobotModeData(object):
          rmd.speed_fraction) = struct.unpack_from("!IBQ???????Bd", buf)
         return rmd
 
-# Don't use T_micro (obsolete). For retrocompatibility purposes. 
+# Don't use T_micro (obsolete). For retrocompatibility purposes.
 class JointData(object):
     __slots__ = ['q_actual', 'q_target', 'qd_actual',
                  'I_actual', 'V_actual', 'T_motor', 'T_micro', 'joint_mode']
@@ -95,7 +94,7 @@ class JointData(object):
         for i in range(6):
             jd = JointData()
             (jd.q_actual, jd.q_target, jd.qd_actual, jd.I_actual, jd.V_actual,
-             jd.T_motor, jd.T_micro, 
+             jd.T_motor, jd.T_micro,
              jd.joint_mode) = struct.unpack_from("!dddffffB", buf, offset)
             offset += 41
             all_joints.append(jd)
@@ -160,7 +159,7 @@ class JointLimitData(object):
 
 class ConfigurationData(object):
     __slots__ = ['joint_limit_data',
-                 'v_joint_default', 'a_joint_default', 
+                 'v_joint_default', 'a_joint_default',
                  'v_tool_default', 'a_tool_default', 'eq_radius',
                  'dh_a', 'dh_d', 'dh_alpha', 'dh_theta',
                  'masterboard_version', 'controller_box_type',
@@ -189,14 +188,31 @@ class ForceModeData(object):
          fmd.robot_dexterity) = struct.unpack_from("!IBddddddd", buf)
         return fmd
 
-class AdditionalInfo(object):
+class AdditionalInfoOld(object):
     __slots__ = ['ctrl_bits', 'teach_button']
     @staticmethod
     def unpack(buf):
-        ai = AdditionalInfo()
-        print >> sys.stderr, 'DEBUG=====', repr(buf)
-        (_, _, ai.ctrl_bits, ai.teach_button) = struct.unpack_from("!IBIB", buf)
+        ai = AdditionalInfoOld()
+        (_,_,ai.ctrl_bits, ai.teach_button) = struct.unpack_from("!IBIB", buf)
         return ai
+        
+class AdditionalInfoNew(object):
+    __slots__ = ['teach_button_enabled','teach_button_pressed']
+    @staticmethod
+    def unpack(buf):
+        ai = AdditionalInfoNew()
+        (_,_,ai.teach_button_enabled, ai.teach_button_pressed) = struct.unpack_from("!IBBB", buf)
+        return ai
+        
+class AdditionalInfo(object):
+    @staticmethod
+    def unpack(buf):
+        ai = AdditionalInfo()
+        (plen, ptype) = struct.unpack_from("!IB", buf)
+        if plen == 10:
+            return AdditionalInfoOld.unpack(buf)
+        else:
+            return AdditionalInfoNew.unpack(buf)
 
 class RobotState(object):
     __slots__ = ['robot_mode_data', 'joint_data', 'tool_data',
@@ -244,8 +260,9 @@ class RobotState(object):
             elif ptype == PackageType.FORCE_MODE_DATA:
                 rs.force_mode_data = ForceModeData.unpack(package_buf)
             elif ptype == PackageType.ADDITIONAL_INFO:
-                #rs.additional_info = AdditionalInfo.unpack(package_buf)
-                pass
+                rs.additional_info = AdditionalInfo.unpack(package_buf)
+            elif ptype == PackageType.CALIBRATION_DATA:
+                pass # internal data, should be skipped
             else:
                 rs.unknown_ptypes.append(ptype)
         return rs
@@ -257,11 +274,13 @@ def pstate(o, indent=''):
             print "%s%s: None" % (indent, s)
         elif hasattr(child, '__slots__'):
             print "%s%s:" % (indent, s)
-            pstate(child, indent + '    ')
+            pstate(child, indent + ' ')
         elif hasattr(child, '__iter__'):
             print "%s%s:" % (indent, s)
             for i, c in enumerate(child):
-                print "%s  [%i]:" % (indent, i)
-                pstate(c, indent + '    ')
+                print "%s [%i]:" % (indent, i)
+                pstate(c, indent + ' ')
         else:
             print "%s%s: %s" % (indent, s, child)
+
+
