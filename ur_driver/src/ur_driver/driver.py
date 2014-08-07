@@ -479,7 +479,7 @@ def within_tolerance(a_vec, b_vec, tol_vec):
 class URTrajectoryFollower(object):
     RATE = 0.02
     def __init__(self, robot, goal_time_tolerance=None):
-        self.goal_time_tolerance = goal_time_tolerance or rospy.Duration(2.0)
+        self.goal_time_tolerance = rospy.Duration(2.0)
         self.joint_goal_tolerances = [0.07, 0.07, 0.07, 0.07, 0.07, 0.07]
         self.vel_goal_tolerances = [0.05, 0.05, 0.05, 0.05, 0.05, 0.05]
         self.following_lock = threading.Lock()
@@ -572,7 +572,7 @@ class URTrajectoryFollower(object):
             for i in range(0,len(goal_handle.get_goal().goal_tolerance)):
                 self.joint_goal_tolerances[i] = goal_handle.get_goal().goal_tolerance[i].position
                 self.vel_goal_tolerances[i] = goal_handle.get_goal().goal_tolerance[i].velocity
-            self.goal_time_tolerance = goal_handle.get_goal().goal_time_tolerance
+        self.goal_time_tolerance = goal_handle.get_goal().goal_time_tolerance
             
         # Orders the joints of the trajectory according to joint_names
         reorder_traj_joints(goal_handle.get_goal().trajectory, joint_names)
