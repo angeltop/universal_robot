@@ -59,12 +59,13 @@ connected_robot_cond = threading.Condition(connected_robot_lock)
 pub_joint_states = rospy.Publisher('joint_states', JointState)
 pub_emergency_stop = rospy.Publisher("emergency_stop", Bool)
 
-allow_execution = True;
+allow_execution = None
 pub_wrench = rospy.Publisher('wrench', WrenchStamped)
  #dump_state = open('dump_state', 'wb')
  
 def callback(data):
-    allow_execution = data.data
+    global allow_execution
+    allow_execution = not(data.data)
 sub_abort_execution = rospy.Subscriber("abort_execution", Bool, callback)
 
 class EOF(Exception): pass
@@ -572,7 +573,8 @@ class URTrajectoryFollower(object):
             for i in range(0,len(goal_handle.get_goal().goal_tolerance)):
                 self.joint_goal_tolerances[i] = goal_handle.get_goal().goal_tolerance[i].position
                 self.vel_goal_tolerances[i] = goal_handle.get_goal().goal_tolerance[i].velocity
-        self.goal_time_tolerance = goal_handle.get_goal().goal_time_tolerance
+        if goal_handle.get_goal().goal_time_tolerance> rospy.Duration(1.0):
+            self.goal_time_tolerance = goal_handle.get_goal().goal_time_tolerance
             
         # Orders the joints of the trajectory according to joint_names
         reorder_traj_joints(goal_handle.get_goal().trajectory, joint_names)
@@ -622,8 +624,9 @@ class URTrajectoryFollower(object):
 
     last_now = time.time()
     def _update(self, event):
-        if allow_execution:
-            if self.robot and self.traj:
+        global allow_execution
+        if self.robot and self.traj:
+            if allow_execution:
                 now = time.time()
                 if (now - self.traj_t0) <= self.traj.points[-1].time_from_start.to_sec():
                     self.last_point_sent = False #sending intermediate points
@@ -672,12 +675,17 @@ class URTrajectoryFollower(object):
                             # Took too long to reach the goal. Aborting
                             rospy.logwarn("Took too long to reach the goal.\nDesired: %s\nactual: %s\nvelocity: %s" % \
                             (last_point.positions, state.position, state.velocity))
+                            str = "Time tolerance %s"%self.goal_time_tolerance
+                            rspy.logwarn(str)
                             self.goal_handle.set_aborted(text="Took too long to reach the goal")
                             self.goal_handle = None
                         else:
                             self.goal_handle.set_aborted()
                             self.goal_handle = None
-
+            else:
+                if self.goal_handle:
+                    self.goal_handle.set_aborted(text="Execution was cancel by the user!")
+                    self.goal_handle = None
 # joint_names: list of joints
 #
 # returns: { "joint_name" : joint_offset }
@@ -711,7 +719,8 @@ def main():
     print "Setting prefix to %s" % prefix
     global joint_names
     joint_names = [prefix + name for name in JOINT_NAMES]
-
+    global allow_execution
+    allow_execution =True
     # Parses command line arguments
     parser = optparse.OptionParser(usage="usage: %prog robot_hostname [reverse_port]")
     (options, args) = parser.parse_args(rospy.myargv()[1:])
