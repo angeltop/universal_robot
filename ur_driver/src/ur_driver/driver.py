@@ -40,10 +40,13 @@ MSG_WAYPOINT_FINISHED = 5
 MSG_STOPJ = 6
 MSG_SERVOJ = 7
 MSG_WRENCH = 9
+MSG_SET_PAYLOAD = 10
+MSG_POPUP = 11
 MULT_wrench = 10000.0
 MULT_jointstate = 10000.0
 MULT_time = 1000000.0
 MULT_blend = 1000.0
+MULT_weight = 1000.0
 
 JOINT_NAMES = ['shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
                'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint']
@@ -365,9 +368,17 @@ class CommanderTCPHandler(SocketServer.BaseRequestHandler):
                  [MULT_jointstate * qq for qq in q_robot] + \
                  [MULT_time * t]
         buf = struct.pack("!%ii" % len(params), *params)
+        
         with self.socket_lock:
             self.request.send(buf)
+    
+    def send_set_payload(self, weight):
+        assert(weight>=0.0)
+        params = [MSG_SET_PAYLOAD, weight * MULT_weight]
+        buf = struct.pack("!%ii" % len(params), *params)
         
+        with self.socket_lock:
+            self.request.send(buf)
 
     def send_stopj(self):
         with self.socket_lock:
@@ -375,7 +386,11 @@ class CommanderTCPHandler(SocketServer.BaseRequestHandler):
 
     def set_waypoint_finished_cb(self, cb):
         self.waypoint_finished_cb = cb
-
+    def send_message(self, message):
+        with self.socket_lock:
+            self.request.send(struct.pack("!i", MSG_POPUP))
+            self.request.send(message)
+            
     # Returns the last JointState message sent out
     def get_joint_states(self):
         return self.last_joint_states
@@ -676,7 +691,7 @@ class URTrajectoryFollower(object):
                             rospy.logwarn("Took too long to reach the goal.\nDesired: %s\nactual: %s\nvelocity: %s" % \
                             (last_point.positions, state.position, state.velocity))
                             str = "Time tolerance %s"%self.goal_time_tolerance
-                            rspy.logwarn(str)
+                            rospy.logwarn(str)
                             self.goal_handle.set_aborted(text="Took too long to reach the goal")
                             self.goal_handle = None
                         else:
