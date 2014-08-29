@@ -145,7 +145,7 @@ def driverProg():
   #  t = t + 0.08
   #  sleep(0.08)
   #end
-  set_payload(9.0)
+  set_payload(7.0)
   while True:
     #send_out("Listening")
     ll = socket_read_binary_integer(1)
