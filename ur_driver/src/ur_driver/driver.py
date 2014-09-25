@@ -20,7 +20,7 @@ from geometry_msgs.msg import WrenchStamped
 from ur_driver.deserialize import RobotState, RobotMode
 from std_msgs.msg import Bool
 
-prevent_programming = False
+prevent_programming = None
 
 # Joint offsets, pulled from calibration information stored in the URDF
 #
@@ -729,7 +729,7 @@ def main():
     if rospy.get_param("use_sim_time", False):
         rospy.logwarn("use_sim_time is set!!!")
     global prevent_programming
-    prevent_programming = rospy.get_param("prevent_programming", False)
+    prevent_programming = rospy.get_param("~prevent_programming", False)
     prefix = rospy.get_param("~prefix", "")
     print "Setting prefix to %s" % prefix
     global joint_names
@@ -779,7 +779,7 @@ def main():
             # Checks for disconnect
             if getConnectedRobot(wait=False):
                 time.sleep(0.2)
-                prevent_programming = rospy.get_param("prevent_programming", False)
+                prevent_programming = rospy.get_param("~prevent_programming", False)
                 if prevent_programming:
                     print "Programming now prevented"
                     connection.send_reset_program()
@@ -794,8 +794,9 @@ def main():
                     while not connection.ready_to_program():
                         print "Waiting to program"
                         time.sleep(1.0)
-                    prevent_programming = rospy.get_param("prevent_programming", False)
-                    connection.send_program()
+                    prevent_programming = rospy.get_param("~prevent_programming", False)
+                    if not prevent_programming:
+                        connection.send_program()
 
                     r = getConnectedRobot(wait=True, timeout=1.0)
                     if r:
