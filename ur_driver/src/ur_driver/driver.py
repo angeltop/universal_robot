@@ -18,8 +18,7 @@ from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from geometry_msgs.msg import WrenchStamped
 
 from ur_driver.deserialize import RobotState, RobotMode
-from std_msgs.msg import Bool
-
+from std_msgs.msg import Bool, Float64
 prevent_programming = None
 
 # Joint offsets, pulled from calibration information stored in the URDF
@@ -65,11 +64,16 @@ pub_emergency_stop = rospy.Publisher("emergency_stop", Bool)
 allow_execution = None
 pub_wrench = rospy.Publisher('wrench', WrenchStamped)
  #dump_state = open('dump_state', 'wb')
- 
+r = None
 def callback(data):
     global allow_execution
     allow_execution = not(data.data)
 sub_abort_execution = rospy.Subscriber("abort_execution", Bool, callback)
+def payloadCallback(data):
+    payload = data.data+3.0
+    global r
+    r.send_set_payload(payload)
+sub_payload = rospy.Subscriber("set_payload", Float64, payloadCallback)
 
 class EOF(Exception): pass
 
@@ -146,7 +150,7 @@ class URConnection(object):
             self.__sock = None
         self.last_state = None
         self.robot_state = self.DISCONNECTED
-
+    
     def ready_to_program(self):
         return self.robot_state in [self.READY_TO_PROGRAM, self.EXECUTING]
 
@@ -797,7 +801,7 @@ def main():
                     prevent_programming = rospy.get_param("~prevent_programming", False)
                     if not prevent_programming:
                         connection.send_program()
-
+                    global r
                     r = getConnectedRobot(wait=True, timeout=1.0)
                     if r:
                         break

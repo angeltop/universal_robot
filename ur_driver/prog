@@ -32,7 +32,7 @@ def driverProg():
     socket_send_int(waypoint_id)
     exit_critical
   end
-  
+
   thread statePublisherThread():
     def send_joint_state():
       q = get_joint_positions()
@@ -145,7 +145,7 @@ def driverProg():
   #  t = t + 0.08
   #  sleep(0.08)
   #end
-  set_payload(7.0)
+  set_payload(3.0)
   while True:
     #send_out("Listening")
     ll = socket_read_binary_integer(1)
@@ -212,12 +212,10 @@ def driverProg():
         send_out("Received stopj")
         stopj(1.0)
       elif mtype == MSG_SET_PAYLOAD:
-        enter_critical
         w = socket_read_binary_integer(1)
         weight = w[1] /  MULT_weight
         set_payload(weight)
         send_out("payload changed")
-        exit_critical
       else:
         send_out("Received unknown message type")
       end
